@@ -1,4 +1,8 @@
+# Folder sesi login (jangan sampai terupload ke GitHub!)
+auth_info_wa/
+
+# Folder dependensi Node.js
 node_modules/
-auth_info_baileys/
+
+# File log (opsional)
 *.log
-.DS_Store
