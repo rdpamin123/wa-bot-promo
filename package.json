@@ -1,15 +1,12 @@
 {
-  "name": "wa-bot-promo",
+  "name": "bot-wa-promo",
   "version": "1.0.0",
-  "description": "Bot WhatsApp promo gratis dengan 4 kategori gambar",
+  "description": "Bot WhatsApp kirim gambar 4 kategori dengan pairing code",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.0",
-    "qrcode-terminal": "^0.12.0",
-    "pino": "^9.0.0",
-    "@hapi/boom": "^10.0.1"
+    "@whiskeysockets/baileys": "^6.6.0"
   }
 }
