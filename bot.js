@@ -1,5 +1,5 @@
 const makeWASocket = require('@whiskeysockets/baileys').default;
-const { useMultiFileAuthState, DisconnectReason, makeInMemoryStore, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const fs = require('fs');
 const path = require('path');
@@ -7,11 +7,10 @@ const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const readline = require('readline');
 
-// ===== KONFIGURASI =====
+// Konfigurasi
 const SESSION_DIR = 'auth_info_baileys';
 const GAMBAR_DIR = path.join(__dirname, 'gambar');
 
-// Mapping kategori ke file gambar
 const kategoriGambar = {
     '1': { nama: 'Paling Murah', file: 'murah.jpg' },
     '2': { nama: 'Tebus Heboh', file: 'tebus.jpg' },
@@ -19,47 +18,38 @@ const kategoriGambar = {
     '4': { nama: 'Beli Banyak', file: 'borong.jpg' }
 };
 
-// ===== FUNGSI UTILITY =====
-
-// Delay random agar seperti manusia (2-5 detik)
+// Fungsi delay
 function delayRandom() {
-    const min = 2000;  // 2 detik
-    const max = 5000;  // 5 detik
-    const delay = Math.floor(Math.random() * (max - min + 1)) + min;
-    return new Promise(resolve => setTimeout(resolve, delay));
+    return new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 3000) + 2000));
 }
-
-// Delay pendek untuk jeda antar aksi (0.5-1.5 detik)
 function delayPendek() {
-    const delay = Math.floor(Math.random() * 1000) + 500;
-    return new Promise(resolve => setTimeout(resolve, delay));
+    return new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 1000) + 500));
 }
 
-// Simulasi "sedang mengetik"
+// Simulasi mengetik
 async function simulateTyping(sock, jid) {
     await sock.sendPresenceUpdate('composing', jid);
     await delayPendek();
     await sock.sendPresenceUpdate('paused', jid);
 }
 
-// Cek apakah file gambar ada
+// Cek gambar
 function cekGambar(namaFile) {
-    const filePath = path.join(GAMBAR_DIR, namaFile);
-    return fs.existsSync(filePath);
+    return fs.existsSync(path.join(GAMBAR_DIR, namaFile));
 }
 
-// Kirim menu 4 kategori
+// Kirim menu
 async function kirimMenu(sock, jid) {
     const menuText = `🛍️ *PROMO SPESIAL HARI INI* 🛍️
     
-Silakan pilih kategori promo yang Anda inginkan:
+Silakan pilih kategori promo:
 
-1️⃣ *Paling Murah* - Harga termurah sepanjang masa
-2️⃣ *Tebus Heboh* - Diskon gila-gilaan
-3️⃣ *Hemat Minggu Ini* - Promo mingguan
-4️⃣ *Beli Banyak* - Paket borongan lebih hemat
+1️⃣ *Paling Murah*
+2️⃣ *Tebus Heboh*
+3️⃣ *Hemat Minggu Ini*
+4️⃣ *Beli Banyak*
 
-_Balas dengan angka 1, 2, 3, atau 4 untuk melihat detail promo_`;
+_Balas angka 1, 2, 3, atau 4_`;
 
     await sock.sendMessage(jid, { text: menuText });
 }
@@ -69,61 +59,38 @@ async function kirimGambarPromo(sock, jid, kategori) {
     const data = kategoriGambar[kategori];
     const filePath = path.join(GAMBAR_DIR, data.file);
     
-    // Cek apakah gambar ada
     if (!cekGambar(data.file)) {
-        await sock.sendMessage(jid, { 
-            text: `⚠️ Maaf, gambar untuk kategori "${data.nama}" belum tersedia.\n\nSilakan upload file "${data.file}" ke folder gambar.` 
-        });
+        await sock.sendMessage(jid, { text: `⚠️ Gambar "${data.nama}" belum tersedia.` });
         return;
     }
 
-    // Kirim gambar dengan caption
-    const caption = `📢 *${data.nama}*\n\nBerikut adalah promo terbaru untuk kategori ${data.nama}.`;
-    
     await sock.sendMessage(jid, {
         image: { url: filePath },
-        caption: caption
+        caption: `📢 *${data.nama}*\n\nPromo terbaru untuk Anda.`
     });
 
-    // Tanya mau lihat promo lain
     await delayPendek();
-    await sock.sendMessage(jid, { 
-        text: `✨ Ingin melihat promo lainnya?\nKetik *menu* untuk kembali ke daftar kategori.` 
-    });
+    await sock.sendMessage(jid, { text: `✨ Ketik *menu* untuk lihat kategori lain.` });
 }
 
-// ===== FUNGSI INPUT PAIRING CODE =====
-function tanyaPairingCode() {
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
-
-    return new Promise((resolve) => {
-        rl.question('Gunakan pairing code (tautkan dengan nomor)? (y/n): ', (jawaban) => {
-            rl.close();
-            resolve(jawaban.toLowerCase() === 'y');
-        });
-    });
+// Tanya metode login
+function tanyaPairing() {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise(resolve => rl.question('Gunakan pairing code? (y/n): ', ans => {
+        rl.close();
+        resolve(ans.toLowerCase() === 'y');
+    }));
 }
 
 async function mintaNomor() {
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
-
-    return new Promise((resolve) => {
-        rl.question('Masukkan nomor WhatsApp untuk bot (contoh: 6281234567890): ', (nomor) => {
-            rl.close();
-            // Hapus karakter non-digit
-            const cleanNumber = nomor.replace(/\D/g, '');
-            resolve(cleanNumber);
-        });
-    });
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise(resolve => rl.question('Nomor WA bot (contoh: 62812xxx): ', ans => {
+        rl.close();
+        resolve(ans.replace(/\D/g, ''));
+    }));
 }
 
-// ===== KONEKSI WHATSAPP =====
+// Koneksi WA
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
     const { version } = await fetchLatestBaileysVersion();
@@ -131,114 +98,60 @@ async function connectToWhatsApp() {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: false, // akan kita handle manual
         logger: pino({ level: 'silent' }),
         browser: ['Termux Bot', 'Chrome', '1.0.0']
     });
 
-    // Tanyakan metode login
-    const pakaiPairing = await tanyaPairingCode();
-    
+    const pakaiPairing = await tanyaPairing();
     if (pakaiPairing) {
-        const nomorBot = await mintaNomor();
-        console.log(`\n📱 Meminta kode pairing untuk nomor: ${nomorBot}`);
-        
-        // Minta kode pairing
-        const pairingCode = await sock.requestPairingCode(nomorBot);
-        console.log('\n✅ Kode pairing Anda: *' + pairingCode + '*');
-        console.log('\n📲 Buka WhatsApp di HP Anda, masuk ke:');
-        console.log('   Pengaturan > Perangkat Tertaut > Tautkan Perangkat');
-        console.log('   Pilih "Tautkan dengan Nomor Telepon"');
-        console.log('   Masukkan kode 8 digit di atas.');
-        console.log('\n⏳ Menunggu konfirmasi dari WhatsApp...');
-    } else {
-        console.log('\n📱 Gunakan QR Code untuk login.');
+        const nomor = await mintaNomor();
+        const code = await sock.requestPairingCode(nomor);
+        console.log(`\n✅ Kode pairing: *${code}*`);
+        console.log('📲 Buka WA > Perangkat Tertaut > Tautkan dengan Nomor Telepon');
     }
 
-    // Handle event koneksi
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
-        
-        // Tampilkan QR jika diperlukan (hanya jika tidak pakai pairing)
         if (qr && !pakaiPairing) {
-            console.log('\n📱 Scan QR Code ini dengan WhatsApp Anda:');
+            console.log('\n📱 Scan QR:');
             qrcode.generate(qr, { small: true });
         }
-        
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('⚠️ Koneksi terputus. Mencoba reconnect...');
-            if (shouldReconnect) {
-                connectToWhatsApp();
-            } else {
-                console.log('❌ Logout. Hapus folder auth_info_baileys untuk login ulang.');
-                process.exit(0);
-            }
+            if (shouldReconnect) connectToWhatsApp();
+            else console.log('Logout. Hapus folder auth_info_baileys untuk login ulang.');
         } else if (connection === 'open') {
-            console.log('\n✅ Bot berhasil terhubung ke WhatsApp!');
-            console.log('🤖 Bot siap menerima pesan promo...');
-            console.log('💡 Kirim pesan apa saja ke nomor bot untuk menampilkan menu.\n');
+            console.log('✅ Bot terhubung!');
         }
     });
 
-    // Simpan kredensial
     sock.ev.on('creds.update', saveCreds);
 
-    // Handle pesan masuk
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
-        
-        // Abaikan pesan dari bot sendiri atau pesan tanpa teks
         if (!msg.message || msg.key.fromMe) return;
         
-        // Ambil teks pesan
-        const messageType = Object.keys(msg.message)[0];
-        let pesanText = '';
-        
-        if (messageType === 'conversation') {
-            pesanText = msg.message.conversation;
-        } else if (messageType === 'extendedTextMessage') {
-            pesanText = msg.message.extendedTextMessage.text;
-        } else if (messageType === 'imageMessage') {
-            // Jika user kirim gambar, kasih balasan default
-            pesanText = 'menu';
-        }
+        let pesan = '';
+        const type = Object.keys(msg.message)[0];
+        if (type === 'conversation') pesan = msg.message.conversation;
+        else if (type === 'extendedTextMessage') pesan = msg.message.extendedTextMessage.text;
+        else pesan = 'menu';
         
         const jid = msg.key.remoteJid;
-        const pesan = pesanText.toLowerCase().trim();
-        
-        console.log(`📨 Pesan dari ${jid}: "${pesan}"`);
+        const teks = pesan.toLowerCase().trim();
+        console.log(`📨 ${jid}: ${teks}`);
 
-        // Cek apakah pesan mengandung kata kunci atau angka
-        const isMenu = pesan.includes('menu') || pesan.includes('halo') || pesan.includes('hai') || 
-                       pesan.includes('promo') || pesan.includes('start') || pesan.includes('mulai');
-        
-        // Jika user kirim angka 1-4
-        if (['1', '2', '3', '4'].includes(pesan)) {
+        if (['1','2','3','4'].includes(teks)) {
             await delayRandom();
             await simulateTyping(sock, jid);
-            await kirimGambarPromo(sock, jid, pesan);
-        }
-        // Jika user kirim perintah menu atau kata sapaan
-        else if (isMenu) {
-            await delayRandom();
-            await simulateTyping(sock, jid);
-            await kirimMenu(sock, jid);
-        }
-        // Jika user kirim pesan lain (customer chat apapun muncul menu)
-        else if (pesan.length > 0) {
+            await kirimGambarPromo(sock, jid, teks);
+        } else {
             await delayRandom();
             await simulateTyping(sock, jid);
             await kirimMenu(sock, jid);
         }
     });
-
-    return sock;
 }
 
-// Jalankan bot
-console.log('🤖 Memulai WhatsApp Bot Promo...');
-connectToWhatsApp().catch(err => {
-    console.error('❌ Error:', err);
-    process.exit(1);
-});
+console.log('🤖 Memulai WA Bot Promo...');
+connectToWhatsApp().catch(err => console.error('Error:', err));
